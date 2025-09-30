@@ -1,0 +1,77 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# General
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Git
+*.orig
+
+# Dotnet / ASP.NET Core
+bin/
+obj/
+artifacts/
+TestResults/
+*.trx
+
+# User-specific
+*.user
+*.suo
+*.userosscache
+*.sln.DotSettings.user
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.ReSharper*/
+*_Resharper*/
+.ReSharper.Caches/
+.vscode/
+
+# Publish profiles
+# (keep .pubxml, ignore machine-specific .user files)
+Properties/PublishProfiles/*.pubxml.user
+
+# App settings (local overrides)
+appsettings.*.local.json
+appsettings.local.json
+secrets.json
+
+# Logs and runtime output
+Logs/
+logs/
+log/
+wwwroot/uploads/
+wwwroot/tmp/
+
+# Node / Frontend (Vite/React/TypeScript)
+node_modules/
+dist/
+build/
+coverage/
+.npmrc
+.eslintcache
+.stylelintcache
+.turbo/
+.parcel-cache/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.env
+.env.*.local
+.env.local
+
+# Package artifacts
+*.nupkg
+*.snupkg
+
+# Keep test files out of repo
+/test_files/

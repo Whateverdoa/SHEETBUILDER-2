@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  vdp-sheet-builder-api:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:80
+    volumes:
+      - ./wwwroot/uploads:/app/wwwroot/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/pdf/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

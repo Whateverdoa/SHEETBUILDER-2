@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VDP Sheet Builder API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="file"], select, input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+        }
+        .progress-container {
+            margin: 15px 0;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #007bff;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        .progress-text {
+            text-align: center;
+            margin-top: 5px;
+            font-size: 14px;
+        }
+        .stage-info {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .download-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background-color: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .download-link:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VDP Sheet Builder API</h1>
+        
+        <form id="pdfForm">
+            <div class="form-group">
+                <label for="pdfFile">Select PDF File:</label>
+                <input type="file" id="pdfFile" name="pdfFile" accept=".pdf" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="rotationAngle">Rotation Angle:</label>
+                <select id="rotationAngle" name="rotationAngle">
+                    <option value="0">0° (Normal)</option>
+                    <option value="180" selected>180° (Upside Down)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="order">Page Order:</label>
+                <select id="order" name="order">
+                    <option value="Norm">Normal</option>
+                    <option value="Rev" selected>Reverse</option>
+                </select>
+            </div>
+            
+            <button type="submit" id="submitBtn">Process PDF</button>
+        </form>
+        
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        let currentEventSource = null;
+        
+        let isProcessing = false; // Prevent automatic retries
+        
+        document.getElementById('pdfForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // CRITICAL: Prevent automatic retries
+            if (isProcessing) {
+                console.log('Already processing - ignoring submit');
+                return;
+            }
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const resultDiv = document.getElementById('result');
+            
+            // Close any existing EventSource connection
+            if (currentEventSource) {
+                currentEventSource.close();
+            }
+            
+            isProcessing = true; // Lock to prevent retries
+            
+            // Show loading state with progress bar
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Starting...';
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result loading';
+            resultDiv.innerHTML = `
+                <h3>🚀 Processing PDF...</h3>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Starting...</div>
+                </div>
+                <div class="stage-info" id="stageInfo">Initializing processing...</div>
+            `;
+            
+            try {
+                // Step 1: Start processing with progress tracking
+                const fileInput = document.getElementById('pdfFile');
+                const file = fileInput.files[0];
+                
+                // Debug logging
+                console.log('File selected:', file ? file.name : 'No file');
+                console.log('File size:', file ? file.size : 'N/A');
+                
+                if (!file) {
+                    throw new Error('Please select a PDF file');
+                }
+                
+                const formData = new FormData();
+                formData.append('PdfFile', file);
+                formData.append('RotationAngle', document.getElementById('rotationAngle').value);
+                formData.append('Order', document.getElementById('order').value);
+                
+                // Debug form data
+                console.log('Form data prepared:', {
+                    fileName: file.name,
+                    rotationAngle: document.getElementById('rotationAngle').value,
+                    order: document.getElementById('order').value
+                });
+                
+                console.log('Sending request to /api/pdf/process-with-progress');
+                const startResponse = await fetch('/api/pdf/process-with-progress', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('Response status:', startResponse.status);
+                const startResult = await startResponse.json();
+                console.log('Response data:', startResult);
+                
+                if (!startResult.success) {
+                    throw new Error(startResult.message || 'Failed to start processing');
+                }
+                
+                const jobId = startResult.jobId;
+                document.getElementById('stageInfo').textContent = `Job started: ${jobId}`;
+                
+                // Step 2: Connect to progress stream
+                currentEventSource = new EventSource(`/api/pdf/progress/${jobId}`);
+                
+                currentEventSource.onmessage = function(event) {
+                    try {
+                        const progress = JSON.parse(event.data);
+                        updateProgressDisplay(progress);
+                        
+                        // Check if processing is complete
+                        if (progress.stage === 'Completed') {
+                            currentEventSource.close();
+                            handleProcessingComplete(jobId);
+                        } else if (progress.stage === 'Failed') {
+                            currentEventSource.close();
+                            handleProcessingFailed(progress.error || 'Processing failed');
+                        }
+                    } catch (e) {
+                        console.error('Error parsing progress data:', e);
+                    }
+                };
+                
+                currentEventSource.onerror = function(event) {
+                    console.error('EventSource error:', event);
+                    currentEventSource.close();
+                    // Fallback to polling if SSE fails
+                    pollForCompletion(jobId);
+                };
+                
+            } catch (error) {
+                console.error('Frontend error:', error);
+                console.error('Error stack:', error.stack);
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h3>❌ Error</h3>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>Debug:</strong> Check browser console for details</p>
+                `;
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Process PDF';
+                
+                // CRITICAL: Reset processing lock on error
+                isProcessing = false;
+            }
+        });
+        
+        function updateProgressDisplay(progress) {
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            const stageInfo = document.getElementById('stageInfo');
+            
+            console.log('Progress data received:', progress);
+            
+            const percentage = progress.percentageComplete || 0;
+            const stage = progress.stage || 'Processing';
+            const currentPage = progress.currentPage || 0;
+            const totalPages = progress.totalPages || 0;
+            const pagesPerSecond = progress.pagesPerSecond || 0;
+            
+            if (progressFill) {
+                progressFill.style.width = `${percentage}%`;
+            }
+            if (progressText) {
+                progressText.textContent = `${percentage.toFixed(1)}% (${stage})`;
+            }
+            if (stageInfo) {
+                stageInfo.textContent = `Stage: ${stage}\nPages: ${currentPage}/${totalPages}\nSpeed: ${pagesPerSecond.toFixed(1)} pages/sec`;
+            }
+        }
+        
+        async function handleProcessingComplete(jobId) {
+            try {
+                const statusResponse = await fetch(`/api/pdf/status/${jobId}`);
+                const statusData = await statusResponse.json();
+                
+                if (statusData.success && statusData.result) {
+                    const result = statusData.result;
+                    const resultDiv = document.getElementById('result');
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        <h3>✅ PDF Processed Successfully!</h3>
+                        <p><strong>Message:</strong> ${result.message}</p>
+                        <p><strong>Input Pages:</strong> ${result.inputPages}</p>
+                        <p><strong>Output Pages:</strong> ${result.outputPages}</p>
+                        <p><strong>Processing Time:</strong> ${result.processingTime}</p>
+                        <a href="${result.downloadUrl}" class="download-link" download="${result.outputFileName}">
+                            📥 Download Processed PDF
+                        </a>
+                    `;
+                } else {
+                    throw new Error('Failed to get final result');
+                }
+            } catch (error) {
+                handleProcessingFailed(error.message);
+            } finally {
+                resetForm();
+            }
+        }
+        
+        function handleProcessingFailed(errorMessage) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = 'result error';
+            resultDiv.innerHTML = `
+                <h3>❌ Processing Failed</h3>
+                <p><strong>Error:</strong> ${errorMessage}</p>
+            `;
+            resetForm();
+        }
+        
+        async function pollForCompletion(jobId) {
+            // Fallback polling if SSE fails
+            const pollInterval = setInterval(async () => {
+                try {
+                    const statusResponse = await fetch(`/api/pdf/status/${jobId}`);
+                    const statusData = await statusResponse.json();
+                    
+                    if (statusData.success) {
+                        if (statusData.stage === 'Completed') {
+                            clearInterval(pollInterval);
+                            handleProcessingComplete(jobId);
+                        } else if (statusData.stage === 'Failed') {
+                            clearInterval(pollInterval);
+                            handleProcessingFailed(statusData.error || 'Processing failed');
+                        }
+                        // Update progress if available
+                        if (statusData.progress) {
+                            updateProgressDisplay(statusData.progress);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Polling error:', error);
+                }
+            }, 2000); // Poll every 2 seconds
+            
+            // Stop polling after 30 minutes
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                handleProcessingFailed('Processing timeout - please try again');
+            }, 30 * 60 * 1000);
+        }
+        
+        function resetForm() {
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Process PDF';
+            
+            if (currentEventSource) {
+                currentEventSource.close();
+                currentEventSource = null;
+            }
+            
+            // CRITICAL: Reset processing lock to allow new uploads
+            isProcessing = false;
+            console.log('Processing lock released');
+        }
+    </script>
+</body>
+</html>

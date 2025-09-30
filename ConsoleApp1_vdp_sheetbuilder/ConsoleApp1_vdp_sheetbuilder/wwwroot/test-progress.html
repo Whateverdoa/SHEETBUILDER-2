@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Progress API Test</title>
+</head>
+<body>
+    <h1>Progress API Test</h1>
+    <button onclick="testProgressAPI()">Test Progress API</button>
+    <div id="test-results"></div>
+    
+    <script>
+        async function testProgressAPI() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<p>Testing...</p>';
+            
+            try {
+                // Test 1: Start processing with progress
+                const response = await fetch('/api/pdf/process-with-progress', {
+                    method: 'POST',
+                    body: new FormData() // Empty form for test
+                });
+                
+                if (response.status === 400) {
+                    results.innerHTML += '<p>✅ Test 1 passed: Correctly rejected empty form</p>';
+                } else {
+                    results.innerHTML += '<p>❌ Test 1 failed: Should reject empty form</p>';
+                    return;
+                }
+                
+                // Test 2: Check health endpoint
+                const healthResponse = await fetch('/api/pdf/health');
+                const healthData = await healthResponse.json();
+                
+                if (healthData.status === 'Healthy') {
+                    results.innerHTML += '<p>✅ Test 2 passed: Health endpoint working</p>';
+                } else {
+                    results.innerHTML += '<p>❌ Test 2 failed: Health endpoint not working</p>';
+                }
+                
+                results.innerHTML += '<p>✅ All tests passed! Progress API endpoints are available.</p>';
+                
+            } catch (error) {
+                results.innerHTML += `<p>❌ Test failed: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

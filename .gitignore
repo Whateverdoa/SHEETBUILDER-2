@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Agent tooling artifacts
+.claude/
+ConsoleApp1_vdp_sheetbuilder/.idea/
+
+# Runtime artifacts
+*.log
+*.pid
+/tmp/
+sheetbuilder-frontend/*.log
+
+# .NET build output
+ConsoleApp1_vdp_sheetbuilder/**/bin/
+ConsoleApp1_vdp_sheetbuilder/**/obj/
+
+# Node.js build output
+sheetbuilder-frontend/node_modules/
+sheetbuilder-frontend/dist/
+sheetbuilder-frontend/.vite/
+sheetbuilder-frontend/.eslintcache

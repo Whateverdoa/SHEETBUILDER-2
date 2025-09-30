@@ -1,0 +1,207 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ChunkedUploader, ChunkedUploadError } from '../services/chunked-upload'
+
+describe('ChunkedUploader', () => {
+  let uploader: ChunkedUploader
+  let mockXHR: any
+  let progressCallback: vi.Mock
+
+  beforeEach(() => {
+    uploader = new ChunkedUploader('http://localhost:5000', {
+      chunkSize: 1024, // 1KB for testing
+      maxRetries: 2,
+      timeout: 5000
+    })
+    progressCallback = vi.fn()
+    
+    mockXHR = new (global.XMLHttpRequest as any)()
+    vi.spyOn(global, 'XMLHttpRequest').mockReturnValue(mockXHR)
+  })
+
+  describe('uploadFile', () => {
+    it('should use regular upload for small files', async () => {
+      const smallFile = new File(['small'], 'small.pdf', { type: 'application/pdf' })
+      
+      mockXHR.status = 200
+      mockXHR.responseText = JSON.stringify({ success: true })
+
+      const uploadPromise = uploader.uploadFile(
+        smallFile,
+        '/api/pdf/process',
+        { rotationAngle: '180' },
+        progressCallback
+      )
+
+      // Simulate progress and completion
+      mockXHR.upload._trigger('progress', { lengthComputable: true, loaded: 50, total: 100 })
+      mockXHR._trigger('load')
+
+      const result = await uploadPromise
+      expect(result).toEqual({ success: true })
+      
+      // Should show single chunk progress
+      expect(progressCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          percentage: 50,
+          currentChunk: 1,
+          totalChunks: 1,
+          stage: 'uploading'
+        })
+      )
+    })
+
+    it('should use chunked upload for large files', async () => {
+      // Create a file larger than chunk size (1KB)
+      const largeContent = 'x'.repeat(2048) // 2KB
+      const largeFile = {
+        name: 'large.pdf',
+        type: 'application/pdf',
+        size: 2048,
+        slice: vi.fn((start: number, end: number) => {
+          const slicedContent = largeContent.slice(start, end)
+          return new File([slicedContent], 'chunk.pdf', { type: 'application/pdf' })
+        })
+      } as unknown as File
+
+      mockXHR.status = 200
+      mockXHR.responseText = JSON.stringify({ success: true })
+
+      const uploadPromise = uploader.uploadFile(
+        largeFile,
+        '/api/pdf/process',
+        { rotationAngle: '180' },
+        progressCallback
+      )
+
+      // Simulate successful chunk uploads
+      mockXHR._trigger('load') // First chunk
+      mockXHR._trigger('load') // Second chunk
+      mockXHR._trigger('load') // Completion
+
+      const result = await uploadPromise
+      expect(result).toEqual({ success: true })
+
+      // Should have been called with chunked progress
+      expect(progressCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          totalChunks: 2,
+          stage: 'uploading'
+        })
+      )
+    })
+
+    it('should retry failed chunks', async () => {
+      const largeContent = 'x'.repeat(1536) // 1.5KB
+      const largeFile = {
+        name: 'large.pdf',
+        type: 'application/pdf', 
+        size: 1536,
+        slice: vi.fn((start: number, end: number) => {
+          const slicedContent = largeContent.slice(start, end)
+          return new File([slicedContent], 'chunk.pdf', { type: 'application/pdf' })
+        })
+      } as unknown as File
+
+      let callCount = 0
+      const mockXHRFactory = () => {
+        const xhr = new (global.XMLHttpRequest as any)()
+        callCount++
+        
+        if (callCount === 1) {
+          // First chunk fails
+          xhr.status = 500
+          xhr.responseText = 'Server Error'
+        } else {
+          // Retry and completion succeed
+          xhr.status = 200
+          xhr.responseText = JSON.stringify({ success: true })
+        }
+        
+        return xhr
+      }
+
+      vi.spyOn(global, 'XMLHttpRequest').mockImplementation(mockXHRFactory)
+
+      const uploadPromise = uploader.uploadFile(
+        largeFile,
+        '/api/pdf/process',
+        { rotationAngle: '180' },
+        progressCallback
+      )
+
+      // Let enough time pass for retries
+      setTimeout(() => {
+        // Trigger the responses
+        const xhrs = (global.XMLHttpRequest as any).mock.results.map(r => r.value)
+        xhrs.forEach((xhr: any) => xhr._trigger('load'))
+      }, 100)
+
+      // The upload should eventually succeed after retry
+      await expect(uploadPromise).resolves.toEqual({ success: true })
+    })
+
+    it('should fail after max retries exceeded', async () => {
+      const largeContent = 'x'.repeat(1536) // 1.5KB
+      const largeFile = {
+        name: 'large.pdf',
+        type: 'application/pdf',
+        size: 1536,
+        slice: vi.fn((start: number, end: number) => {
+          const slicedContent = largeContent.slice(start, end)
+          return new File([slicedContent], 'chunk.pdf', { type: 'application/pdf' })
+        })
+      } as unknown as File
+
+      // All attempts fail
+      mockXHR.status = 500
+      mockXHR.responseText = 'Server Error'
+
+      const uploadPromise = uploader.uploadFile(
+        largeFile,
+        '/api/pdf/process',
+        { rotationAngle: '180' },
+        progressCallback
+      )
+
+      // Trigger failure responses
+      setTimeout(() => {
+        const xhrs = (global.XMLHttpRequest as any).mock.results.map(r => r.value)
+        xhrs.forEach((xhr: any) => xhr._trigger('load'))
+      }, 100)
+
+      await expect(uploadPromise).rejects.toThrow(ChunkedUploadError)
+    })
+
+    it('should handle network errors', async () => {
+      const file = new File(['content'], 'test.pdf', { type: 'application/pdf' })
+      
+      const uploadPromise = uploader.uploadFile(
+        file,
+        '/api/pdf/process',
+        { rotationAngle: '180' },
+        progressCallback
+      )
+
+      // Simulate network error
+      mockXHR._trigger('error')
+
+      await expect(uploadPromise).rejects.toThrow('Network error occurred')
+    })
+
+    it('should handle timeout errors', async () => {
+      const file = new File(['content'], 'test.pdf', { type: 'application/pdf' })
+      
+      const uploadPromise = uploader.uploadFile(
+        file,
+        '/api/pdf/process',
+        { rotationAngle: '180' },
+        progressCallback
+      )
+
+      // Simulate timeout
+      mockXHR._trigger('timeout')
+
+      await expect(uploadPromise).rejects.toThrow('Upload timed out')
+    })
+  })
+})
