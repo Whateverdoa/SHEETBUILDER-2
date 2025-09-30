@@ -4,6 +4,7 @@ using ConsoleApp1_vdp_sheetbuilder.Services;
 using System.Text.Json;
 using System.Text;
 using System.IO;
+using System.Linq;
 
 namespace ConsoleApp1_vdp_sheetbuilder.Controllers
 {
@@ -322,12 +323,14 @@ namespace ConsoleApp1_vdp_sheetbuilder.Controllers
             try
             {
                 var uploadsDir = Path.Combine(_environment.WebRootPath, "uploads");
-                var filePath = Path.Combine(uploadsDir, filename);
+                var filePath = ResolveFilePath(uploadsDir, filename);
 
-                if (!System.IO.File.Exists(filePath))
+                if (filePath is null)
                 {
                     return NotFound(new { success = false, message = "File not found or may have already been downloaded" });
                 }
+
+                filename = Path.GetFileName(filePath);
 
                 var contentType = "application/pdf";
                 var cleanFilename = GetCleanFilename(filename);
@@ -357,6 +360,34 @@ namespace ConsoleApp1_vdp_sheetbuilder.Controllers
                 _logger.LogError(ex, "Error downloading file: {Filename}", filename);
                 return StatusCode(500, new { success = false, message = "Error downloading file" });
             }
+        }
+
+        private static string? ResolveFilePath(string uploadsDir, string requestedFilename)
+        {
+            if (string.IsNullOrWhiteSpace(requestedFilename))
+            {
+                return null;
+            }
+
+            if (!Directory.Exists(uploadsDir))
+            {
+                return null;
+            }
+
+            var safeFilename = Path.GetFileName(requestedFilename);
+            var directPath = Path.Combine(uploadsDir, safeFilename);
+
+            if (System.IO.File.Exists(directPath))
+            {
+                return directPath;
+            }
+
+            var searchPattern = $"*_{safeFilename}";
+            var matchingFile = Directory.EnumerateFiles(uploadsDir, searchPattern, SearchOption.TopDirectoryOnly)
+                .OrderByDescending(path => System.IO.File.GetLastWriteTimeUtc(path))
+                .FirstOrDefault();
+
+            return matchingFile;
         }
 
         private string GetCleanFilename(string guidFilename)

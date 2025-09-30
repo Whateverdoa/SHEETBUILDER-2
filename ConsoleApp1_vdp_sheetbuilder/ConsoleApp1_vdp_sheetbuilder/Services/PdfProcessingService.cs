@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using iText.Kernel.Pdf;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf.Canvas;
@@ -237,7 +238,7 @@ namespace ConsoleApp1_vdp_sheetbuilder.Services
                 response.Success = true;
                 response.Message = "PDF processed and optimized successfully!";
                 response.OutputFileName = cleanFileName; // Clean name for download
-                response.DownloadUrl = $"/uploads/{outputFileName}"; // Actual file path with GUID
+                response.DownloadUrl = $"/api/pdf/download/{Uri.EscapeDataString(cleanFileName)}";
                 response.InputPages = totalPages;
 
                 _logger.LogInformation("PDF with custom-sized pages created successfully! Output file: {OutputFilePath}", outputFilePath);
@@ -513,7 +514,7 @@ namespace ConsoleApp1_vdp_sheetbuilder.Services
                 response.Success = true;
                 response.Message = "PDF processed and optimized successfully with real-time progress!";
                 response.OutputFileName = cleanFileName;
-                response.DownloadUrl = $"/uploads/{outputFileName}";
+                response.DownloadUrl = $"/api/pdf/download/{Uri.EscapeDataString(cleanFileName)}";
                 response.InputPages = totalPages;
                 _logger.LogInformation("PDF with custom-sized pages created successfully! Output file: {OutputFilePath}", outputFilePath);
             }
@@ -828,7 +829,7 @@ namespace ConsoleApp1_vdp_sheetbuilder.Services
                 response.Success = true;
                 response.Message = "PDF processed and optimized successfully with real-time progress!";
                 response.OutputFileName = cleanFileName; // Clean name for download
-                response.DownloadUrl = $"/uploads/{outputFileName}"; // Actual file path with GUID
+                response.DownloadUrl = $"/api/pdf/download/{Uri.EscapeDataString(cleanFileName)}";
                 response.InputPages = totalPages;
 
                 _logger.LogInformation("PDF with custom-sized pages created successfully! Output file: {OutputFilePath}", outputFilePath);
