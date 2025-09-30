@@ -7,7 +7,8 @@ const buttonVariants = {
   secondary: 'btn-secondary',
   outline: 'border border-slate-300 dark:border-slate-600 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800',
   ghost: 'bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800',
-}
+  destructive: 'btn-destructive',
+} as const
 
 const buttonSizes = {
   sm: 'px-3 py-1.5 text-sm',

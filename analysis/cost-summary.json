@@ -1,0 +1,26 @@
+{
+  "generated_at": "2025-09-30T09:27:02Z",
+  "model": "gpt-4o-mini",
+  "assumptions": {
+    "token_rate_per_million_usd": 0.15,
+    "estimation_method": "approx_tokens = character_count / 4"
+  },
+  "codebase_breakdown": {
+    "backend": {
+      "source_lines": 2521,
+      "character_count": 107791,
+      "estimated_input_tokens": 26948
+    },
+    "frontend": {
+      "source_lines": 3231,
+      "character_count": 96912,
+      "estimated_input_tokens": 24228
+    }
+  },
+  "estimated_total_tokens": 51176,
+  "estimated_analysis_cost_usd": 0.01,
+  "notes": [
+    "Token estimate excludes build artefacts and binary assets per .analysisignore.",
+    "Assumes read-only analysis pass with no large binary uploads."
+  ]
+}

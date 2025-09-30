@@ -28,7 +28,7 @@ namespace ConsoleApp1_vdp_sheetbuilder.Services
             {
                 try
                 {
-                    await PerformCleanup();
+                    PerformCleanup();
                 }
                 catch (Exception ex)
                 {
@@ -39,7 +39,7 @@ namespace ConsoleApp1_vdp_sheetbuilder.Services
             }
         }
 
-        private async Task PerformCleanup()
+        private void PerformCleanup()
         {
             var storageDirectory = _storageOptions.GetStoragePath(_environment.WebRootPath);
 

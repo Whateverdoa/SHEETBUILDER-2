@@ -263,7 +263,7 @@ namespace ConsoleApp1_vdp_sheetbuilder.Services
             return response;
         }
 
-        public async Task<PdfProcessingResponse> ProcessPdfWithProgressFromPath(
+        public Task<PdfProcessingResponse> ProcessPdfWithProgressFromPath(
             string sourceFilePath,
             string originalFileName,
             int rotationAngle,
@@ -532,7 +532,7 @@ namespace ConsoleApp1_vdp_sheetbuilder.Services
                 CleanupTemporaryFiles(sourceFilePath, directory, fileNameWithoutExtension, extension);
             }
 
-            return response;
+            return Task.FromResult(response);
         }
 
         public async Task<PdfProcessingResponse> ProcessPdfWithProgress(IFormFile pdfFile, int rotationAngle, string order, string jobId, IProgressService progressService)

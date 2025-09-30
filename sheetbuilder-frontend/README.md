@@ -1,69 +1,40 @@
-# React + TypeScript + Vite
+# SheetBuilder Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript UI for the SheetBuilder PDF processing service. The app handles large PDF uploads, queues files for processing, and streams progress updates from the API.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Quick start
+```bash
+npm install
+npm run dev -- --port 5174
+```
+Set `VITE_API_URL` to point at the backend (defaults to `http://localhost:5002`). Example:
+```bash
+VITE_API_URL=https://sheetbuilder-api.example.com npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Scripts
+| Command | Description |
+| ------- | ----------- |
+| `npm run dev` | Start Vite dev server (port 5174 by default) |
+| `npm run build` | Type-check and build production bundle |
+| `npm run lint` | ESLint with type-aware rules |
+| `npm run test` | Vitest in watch mode |
+| `npm run test:run` | Vitest in CI mode |
+| `npm run preview` | Preview the production build |
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Environment variables
+| Variable | Purpose | Default |
+| -------- | ------- | ------- |
+| `VITE_API_URL` | Backend base URL used for all API calls | `http://localhost:5002` |
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Production build
+```bash
+npm run build
 ```
+The compiled assets land in `dist/`. Serve them via the backend, a CDN, or any static file host. Pair with the backend published from `ConsoleApp1_vdp_sheetbuilder`.
+
+## Testing notes
+- Upload tests rely on mocked `XMLHttpRequest`; run `npm run test:run` in CI.
+- Strict TypeScript settings prevent unused variables and unsupported toast variants—fix build warnings before committing.
+
+Refer to the root `README.md` for the end-to-end runbook covering both frontend and backend workflows.

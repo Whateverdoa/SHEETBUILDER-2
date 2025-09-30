@@ -6,8 +6,7 @@ import { Settings, RotateCcw, ArrowUpDown } from 'lucide-react'
 import { Card, CardHeader, CardContent, Button, Select, LoadingSpinner, Progress } from '../ui'
 import { FileUpload } from './FileUpload'
 import { useProcessPdf } from '../../services'
-import { formatFileSize } from '../../utils'
-import type { PdfProcessingRequest, UploadProgress, ChunkProgress } from '../../types'
+import type { PdfProcessingRequest, UploadProgress, ChunkProgress, PdfProcessingResponse } from '../../types'
 import toast from 'react-hot-toast'
 
 const processingSchema = z.object({
@@ -18,7 +17,7 @@ const processingSchema = z.object({
 type ProcessingFormData = z.infer<typeof processingSchema>
 
 interface ProcessingFormProps {
-  onProcessingComplete?: (response: any) => void
+  onProcessingComplete?: (response: PdfProcessingResponse | PdfProcessingResponse[]) => void
   disabled?: boolean
 }
 
@@ -28,15 +27,28 @@ export function ProcessingForm({ onProcessingComplete, disabled = false }: Proce
   const [currentStage, setCurrentStage] = useState<string>('Ready')
   const [chunkInfo, setChunkInfo] = useState<{ current: number; total: number } | null>(null)
   const [currentlyProcessing, setCurrentlyProcessing] = useState(-1)
-  const [processedFiles, setProcessedFiles] = useState<any[]>([])
   const [isQueueProcessing, setIsQueueProcessing] = useState(false)
   const [queueStartTime, setQueueStartTime] = useState<Date | null>(null)
   const [completedCount, setCompletedCount] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
-  const [failedFiles, setFailedFiles] = useState<{file: File, error: any, retryCount: number}[]>([])
+  const [failedFiles, setFailedFiles] = useState<Array<{ file: File; error: unknown; retryCount: number }>>([])
   
   const { mutate: processPdf, isPending, error, reset } = useProcessPdf()
+
+  const showInfoToast = (message: string, icon = 'ℹ️') => {
+    toast(message, { icon })
+  }
+
+  const buildFailureResponse = (fileName: string, err: unknown): PdfProcessingResponse => ({
+    success: false,
+    message: err instanceof Error ? err.message : 'Processing failed',
+    outputFileName: fileName,
+    downloadUrl: undefined,
+    processingTime: '00:00:00.000',
+    inputPages: 0,
+    outputPages: 0,
+  })
   
   const {
     handleSubmit,
@@ -64,25 +76,16 @@ export function ProcessingForm({ onProcessingComplete, disabled = false }: Proce
     setSelectedFiles(files => files.filter((_, i) => i !== index))
   }
 
-  const handleFileRemoveAll = () => {
-    setSelectedFiles([])
-    setUploadProgress(0)
-    setCurrentStage('Ready')
-    setChunkInfo(null)
-    setCurrentlyProcessing(-1)
-    setProcessedFiles([])
-  }
-
   const handlePauseQueue = () => {
     setIsPaused(true)
     setCurrentStage('Queue paused - click Resume to continue')
-    toast.info('Queue paused after current file')
+    showInfoToast('Queue paused after current file', '⏸️')
   }
 
   const handleResumeQueue = () => {
     setIsPaused(false)
     setCurrentStage('Resuming queue...')
-    toast.info('Queue resumed')
+    showInfoToast('Queue resumed', '▶️')
   }
 
   const handleCancelQueue = () => {
@@ -94,7 +97,7 @@ export function ProcessingForm({ onProcessingComplete, disabled = false }: Proce
   const handleRetryFailed = async () => {
     if (failedFiles.length === 0) return
     
-    toast.info(`Retrying ${failedFiles.length} failed files...`)
+    showInfoToast(`Retrying ${failedFiles.length} failed files...`)
     const filesToRetry = [...failedFiles]
     setFailedFiles([])
     
@@ -113,7 +116,7 @@ export function ProcessingForm({ onProcessingComplete, disabled = false }: Proce
             order: retryData.order,
           }
           
-          const response = await new Promise((resolve, reject) => {
+          const response = await new Promise<PdfProcessingResponse>((resolve, reject) => {
             processPdf(
               { request, onUploadProgress: handleUploadProgress },
               { onSuccess: resolve, onError: reject }
@@ -121,9 +124,10 @@ export function ProcessingForm({ onProcessingComplete, disabled = false }: Proce
           })
           
           toast.success(`✅ Retry successful: ${file.name}`)
+          onProcessingComplete?.(response)
         } catch (err) {
           console.error(`Retry failed for ${file.name}:`, err)
-          setFailedFiles(prev => [...prev, {file, error: err, retryCount: retryCount + 1}])
+          setFailedFiles(prev => [...prev, { file, error: err, retryCount: retryCount + 1 }])
           toast.error(`Retry failed: ${file.name}`)
         }
       } else {
@@ -190,13 +194,13 @@ export function ProcessingForm({ onProcessingComplete, disabled = false }: Proce
     setCompletedCount(0)
     setIsPaused(false)
     setIsCancelled(false)
-    const results: any[] = []
+    const results: PdfProcessingResponse[] = []
 
     try {
       for (let i = 0; i < selectedFiles.length; i++) {
         // Check for cancellation
         if (isCancelled) {
-          toast.info(`Queue cancelled after ${i} files`)
+          showInfoToast(`Queue cancelled after ${i} files`, '⛔')
           break
         }
 
@@ -221,7 +225,7 @@ export function ProcessingForm({ onProcessingComplete, disabled = false }: Proce
 
         try {
           console.log(`🚀 Starting processing for file: ${file.name}`)
-          const response = await new Promise((resolve, reject) => {
+          const response = await new Promise<PdfProcessingResponse>((resolve, reject) => {
             processPdf(
               { request, onUploadProgress: handleUploadProgress },
               {
@@ -244,8 +248,8 @@ export function ProcessingForm({ onProcessingComplete, disabled = false }: Proce
         } catch (err) {
           console.error(`💥 Error processing ${file.name}:`, err)
           toast.error(`Failed to process ${file.name}`)
-          results.push({ error: err, fileName: file.name })
-          setFailedFiles(prev => [...prev, {file, error: err, retryCount: 0}])
+          results.push(buildFailureResponse(file.name, err))
+          setFailedFiles(prev => [...prev, { file, error: err, retryCount: 0 }])
           setCompletedCount(prev => prev + 1) // Count failed files too
         }
 
@@ -256,7 +260,6 @@ export function ProcessingForm({ onProcessingComplete, disabled = false }: Proce
         }
       }
 
-      setProcessedFiles(results)
       onProcessingComplete?.(results)
       
       // Calculate total time and show completion summary
@@ -279,7 +282,8 @@ export function ProcessingForm({ onProcessingComplete, disabled = false }: Proce
       setCurrentlyProcessing(-1)
       setCompletedCount(0)
       setQueueStartTime(null)
-    } catch (err) {
+    } catch (error) {
+      console.error('Queue processing failed', error)
       toast.error('Failed to process files')
     } finally {
       setIsQueueProcessing(false)

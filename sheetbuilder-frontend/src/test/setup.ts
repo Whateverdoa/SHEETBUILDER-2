@@ -1,51 +1,82 @@
 import '@testing-library/jest-dom'
+import { vi } from 'vitest'
 
-// Mock window.URL.createObjectURL
+type EventCallback = (data?: unknown) => void
+
+type EventCallbackRegistration = (event: string, callback: EventCallback) => void
+
 global.URL.createObjectURL = vi.fn(() => 'mocked-url')
 global.URL.revokeObjectURL = vi.fn()
 
-// Mock XMLHttpRequest for testing file uploads
 class MockXMLHttpRequest {
-  public upload = {
-    addEventListener: vi.fn(),
-    _trigger: vi.fn((event: string, data?: any) => {
-      const callbacks = this.upload.addEventListener.mock.calls
-        .filter(call => call[0] === event)
-        .map(call => call[1])
-      callbacks.forEach(callback => callback(data))
-    })
-  }
   public status = 200
   public statusText = 'OK'
   public responseText = ''
-  private listeners: Record<string, Function[]> = {}
+  public timeout = 0
 
-  addEventListener(event: string, callback: Function) {
+  private listeners: Record<string, EventCallback[]> = {}
+  private uploadListeners: Record<string, EventCallback[]> = {}
+
+  public upload = {
+    addEventListener: vi.fn<EventCallbackRegistration>((event, callback) => {
+      if (!this.uploadListeners[event]) {
+        this.uploadListeners[event] = []
+      }
+      this.uploadListeners[event].push(callback)
+    }),
+    _trigger: (event: string, data?: unknown) => {
+      for (const callback of this.uploadListeners[event] ?? []) {
+        callback(data)
+      }
+    },
+  }
+
+  public addEventListener(event: string, callback: EventCallback): void {
     if (!this.listeners[event]) {
       this.listeners[event] = []
     }
     this.listeners[event].push(callback)
   }
 
-  open() {}
-  send() {}
-  
-  // Helper method to trigger events in tests
-  _trigger(event: string, data?: any) {
-    if (this.listeners[event]) {
-      this.listeners[event].forEach(callback => callback(data))
+  public open(): void {
+    // no-op for tests
+  }
+
+  public send(): void {
+    // no-op for tests
+  }
+
+  public _trigger(event: string, data?: unknown): void {
+    for (const callback of this.listeners[event] ?? []) {
+      callback(data)
     }
   }
 }
 
-global.XMLHttpRequest = MockXMLHttpRequest as any
-// Lightweight localStorage mock for browser-only persistence APIs
+type TriggerableXMLHttpRequest = XMLHttpRequest & {
+  _trigger: (event: string, data?: unknown) => void
+  upload: {
+    addEventListener: ReturnType<typeof vi.fn<EventCallbackRegistration>>
+    _trigger: (event: string, data?: unknown) => void
+  }
+}
+
+global.XMLHttpRequest = MockXMLHttpRequest as unknown as {
+  new (): TriggerableXMLHttpRequest
+}
+
 const storage = new Map<string, string>()
 Object.defineProperty(window, 'localStorage', {
   value: {
     getItem: (key: string) => (storage.has(key) ? storage.get(key)! : null),
-    setItem: (key: string, value: string) => { storage.set(key, value) },
-    removeItem: (key: string) => { storage.delete(key) },
-    clear: () => { storage.clear() },
+    setItem: (key: string, value: string) => {
+      storage.set(key, value)
+    },
+    removeItem: (key: string) => {
+      storage.delete(key)
+    },
+    clear: () => {
+      storage.clear()
+    },
   },
 })

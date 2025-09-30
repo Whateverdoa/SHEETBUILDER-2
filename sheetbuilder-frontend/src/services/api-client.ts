@@ -45,6 +45,8 @@ interface PersistedJob {
 
 type ProgressHandler = (progress: UploadProgress | ChunkProgress) => void
 
+type ErrorResponseBody = { message?: string; title?: string }
+
 const ONE_HOUR_MS = 60 * 60 * 1000
 
 export class ApiClient {
@@ -62,7 +64,7 @@ export class ApiClient {
       let errorMessage = `HTTP error! status: ${response.status}`
 
       try {
-        const errorData = await response.json()
+        const errorData = await response.json() as ErrorResponseBody
         errorMessage = errorData.message || errorData.title || errorMessage
       } catch {
         errorMessage = response.statusText || errorMessage
@@ -73,7 +75,7 @@ export class ApiClient {
 
     const contentType = response.headers.get('content-type')
     if (contentType && contentType.includes('application/json')) {
-      return response.json()
+      return await response.json() as T
     }
 
     return response.text() as unknown as T
@@ -126,15 +128,15 @@ export class ApiClient {
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
-            const result = JSON.parse(xhr.responseText)
+            const result = JSON.parse(xhr.responseText) as T
             resolve(result)
-          } catch (error) {
+          } catch {
             reject(new ApiError('Failed to parse response JSON'))
           }
         } else {
           let errorMessage = `HTTP error! status: ${xhr.status}`
           try {
-            const errorData = JSON.parse(xhr.responseText)
+            const errorData = JSON.parse(xhr.responseText) as ErrorResponseBody
             errorMessage = errorData.message || errorData.title || errorMessage
           } catch {
             errorMessage = xhr.statusText || errorMessage
@@ -305,13 +307,13 @@ export class ApiClient {
           try {
             const result = JSON.parse(xhr.responseText) as StartProcessingResponse
             resolve(result)
-          } catch (error) {
+          } catch {
             reject(new ApiError('Failed to parse response JSON'))
           }
         } else {
           let errorMessage = `HTTP error! status: ${xhr.status}`
           try {
-            const errorData = JSON.parse(xhr.responseText)
+            const errorData = JSON.parse(xhr.responseText) as ErrorResponseBody
             errorMessage = errorData.message || errorData.title || errorMessage
           } catch {
             errorMessage = xhr.statusText || errorMessage
@@ -424,7 +426,7 @@ export class ApiClient {
                 const status = await this.getJobStatus(jobId)
                 finalizeError(new ApiError(status.error ?? 'Processing failed'))
               }
-            } catch (error) {
+            } catch {
               startPolling()
             }
           }
@@ -436,7 +438,7 @@ export class ApiClient {
               eventSource = null
             }
           }
-        } catch (error) {
+        } catch {
           startPolling()
         }
       } else {

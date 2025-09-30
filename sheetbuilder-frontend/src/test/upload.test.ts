@@ -4,7 +4,7 @@ import { validatePdfFile, formatFileSize } from '../utils/format'
 describe('File Upload Utilities', () => {
   describe('validatePdfFile', () => {
     it('rejects null or undefined files', () => {
-      expect(validatePdfFile(null as any)).toEqual({
+      expect(validatePdfFile(null)).toEqual({
         valid: false,
         error: 'No file selected'
       })

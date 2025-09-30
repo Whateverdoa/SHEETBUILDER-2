@@ -1,18 +1,67 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ApiClient, ApiError } from '../services/api-client'
-import type { PdfProcessingRequest, PdfProcessingResponse, StartProcessingResponse } from '../types'
+import type {
+  ChunkProgress,
+  JobStatusResponse,
+  PdfProcessingRequest,
+  PdfProcessingResponse,
+  StartProcessingResponse,
+  UploadProgress,
+} from '../types'
+
+type EventCallback = (data?: unknown) => void
+
+type UploadListener = (event: string, callback: EventCallback) => void
+
+interface TriggerableUpload {
+  addEventListener: UploadListener
+  _trigger: (event: string, data?: unknown) => void
+}
+
+interface TriggerableXMLHttpRequest extends XMLHttpRequest {
+  _trigger: (event: string, data?: unknown) => void
+  upload: TriggerableUpload
+  status: number
+  statusText: string
+  responseText: string
+}
+
+interface MockProgressEvent {
+  lengthComputable: boolean
+  loaded: number
+  total: number
+}
+
+type ProgressHandlerFn = (progress: UploadProgress | ChunkProgress) => void
+
+type ApiClientInternals = ApiClient & {
+  startProgressUpload: (
+    request: PdfProcessingRequest,
+    formData: FormData,
+    onUploadProgress?: ProgressHandlerFn
+  ) => Promise<StartProcessingResponse>
+  waitForJobCompletion: (
+    jobId: string,
+    options: { onProgress?: ProgressHandlerFn }
+  ) => Promise<PdfProcessingResponse>
+  computeFingerprint: (request: PdfProcessingRequest) => string
+  getJobStatus: (jobId: string) => Promise<JobStatusResponse>
+}
 
 describe('ApiClient Upload', () => {
   let apiClient: ApiClient
-  let mockXHR: any
+  let internalClient: ApiClientInternals
+  let mockXHR: TriggerableXMLHttpRequest
   let progressCallback: vi.Mock
 
   beforeEach(() => {
     apiClient = new ApiClient('http://localhost:5000')
+    internalClient = apiClient as unknown as ApiClientInternals
     progressCallback = vi.fn()
 
-    mockXHR = new (global.XMLHttpRequest as any)()
-    vi.spyOn(global, 'XMLHttpRequest').mockReturnValue(mockXHR)
+    const XMLHttpRequestCtor = global.XMLHttpRequest as unknown as { new (): TriggerableXMLHttpRequest }
+    mockXHR = new XMLHttpRequestCtor()
+    vi.spyOn(global, 'XMLHttpRequest').mockImplementation(() => mockXHR)
   })
 
   afterEach(() => {
@@ -47,7 +96,7 @@ describe('ApiClient Upload', () => {
 
       const uploadPromise = apiClient.postFormData('/api/pdf/process', formData, progressCallback)
 
-      const progressEvent = { lengthComputable: true, loaded: 25, total: 100 }
+      const progressEvent: MockProgressEvent = { lengthComputable: true, loaded: 25, total: 100 }
       mockXHR.upload._trigger('progress', progressEvent)
 
       expect(progressCallback).toHaveBeenCalledWith(
@@ -142,11 +191,11 @@ describe('ApiClient Upload', () => {
       }
 
       const startSpy = vi
-        .spyOn(apiClient as any, 'startProgressUpload')
+        .spyOn(internalClient, 'startProgressUpload')
         .mockResolvedValue({ success: true, jobId: 'job-123' } as StartProcessingResponse)
 
       const waitSpy = vi
-        .spyOn(apiClient as any, 'waitForJobCompletion')
+        .spyOn(internalClient, 'waitForJobCompletion')
         .mockResolvedValue(expected)
 
       const result = await apiClient.processPdf(request, progressCallback)
@@ -171,13 +220,13 @@ describe('ApiClient Upload', () => {
         outputPages: 1,
       }
 
-      vi.spyOn(apiClient as any, 'startProgressUpload').mockResolvedValue({
+      vi.spyOn(internalClient, 'startProgressUpload').mockResolvedValue({
         success: true,
         jobId: 'job-dup',
         result: expected,
       } as StartProcessingResponse)
 
-      const waitSpy = vi.spyOn(apiClient as any, 'waitForJobCompletion')
+      const waitSpy = vi.spyOn(internalClient, 'waitForJobCompletion')
 
       const result = await apiClient.processPdf(request, progressCallback)
 
@@ -197,14 +246,14 @@ describe('ApiClient Upload', () => {
         outputPages: 2,
       }
 
-      const fingerprint = (apiClient as any).computeFingerprint(request)
+      const fingerprint = internalClient.computeFingerprint(request)
       const storageKey = `sheetbuilder:job:${fingerprint}`
       window.localStorage.setItem(
         storageKey,
         JSON.stringify({ jobId: 'resume-1', status: 'processing', updatedAt: Date.now() })
       )
 
-      vi.spyOn(apiClient as any, 'getJobStatus').mockResolvedValue({
+      vi.spyOn(internalClient, 'getJobStatus').mockResolvedValue({
         success: true,
         jobId: 'resume-1',
         stage: 'Completed',
@@ -215,8 +264,8 @@ describe('ApiClient Upload', () => {
         error: null,
       })
 
-      const startSpy = vi.spyOn(apiClient as any, 'startProgressUpload')
-      const waitSpy = vi.spyOn(apiClient as any, 'waitForJobCompletion')
+      const startSpy = vi.spyOn(internalClient, 'startProgressUpload')
+      const waitSpy = vi.spyOn(internalClient, 'waitForJobCompletion')
 
       const result = await apiClient.processPdf(request, progressCallback)
 
@@ -227,12 +276,12 @@ describe('ApiClient Upload', () => {
 
     it('surfacing backend failures as ApiError', async () => {
       const request = createRequest()
-      vi.spyOn(apiClient as any, 'startProgressUpload').mockResolvedValue({
+      vi.spyOn(internalClient, 'startProgressUpload').mockResolvedValue({
         success: true,
         jobId: 'job-fail',
       } as StartProcessingResponse)
 
-      vi.spyOn(apiClient as any, 'waitForJobCompletion').mockRejectedValue(new ApiError('Processing failed', 500))
+      vi.spyOn(internalClient, 'waitForJobCompletion').mockRejectedValue(new ApiError('Processing failed', 500))
 
       await expect(apiClient.processPdf(request, progressCallback)).rejects.toThrow('Processing failed')
     })

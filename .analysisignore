@@ -1,0 +1,11 @@
+.git/
+.DS_Store
+ConsoleApp1_vdp_sheetbuilder/**/bin/
+ConsoleApp1_vdp_sheetbuilder/**/obj/
+ConsoleApp1_vdp_sheetbuilder/ConsoleApp1_vdp_sheetbuilder/wwwroot/uploads/
+sheetbuilder-frontend/node_modules/
+sheetbuilder-frontend/dist/
+sheetbuilder-frontend/.vite/
+sheetbuilder-frontend/coverage/
+TESTFILES-sheetbuilder/
+*.pdf

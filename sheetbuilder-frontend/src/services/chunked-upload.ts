@@ -1,5 +1,8 @@
 import type { UploadProgress } from '../types'
 
+type UploadResponseBody = Record<string, unknown>
+type UploadErrorBody = { message?: string; title?: string }
+
 export interface ChunkUploadOptions {
   chunkSize?: number
   maxRetries?: number
@@ -49,7 +52,7 @@ export class ChunkedUploader {
     _endpoint: string,
     additionalData: Record<string, string> = {},
     _onProgress?: (progress: ChunkProgress) => void
-  ): Promise<any> {
+  ): Promise<unknown> {
     // For files smaller than chunk size, use regular upload
     if (file.size <= this.chunkSize) {
       return this.uploadSmallFile(file, _endpoint, additionalData, _onProgress)
@@ -63,7 +66,7 @@ export class ChunkedUploader {
     endpoint: string,
     additionalData: Record<string, string>,
     _onProgress?: (progress: ChunkProgress) => void
-  ): Promise<any> {
+  ): Promise<unknown> {
     const formData = new FormData()
     formData.append('pdfFile', file)
     
@@ -90,15 +93,15 @@ export class ChunkedUploader {
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
-            const result = JSON.parse(xhr.responseText)
+            const result = JSON.parse(xhr.responseText) as UploadResponseBody
             resolve(result)
-          } catch (error) {
+          } catch {
             reject(new ChunkedUploadError('Failed to parse response JSON'))
           }
         } else {
           let errorMessage = `HTTP error! status: ${xhr.status}`
           try {
-            const errorData = JSON.parse(xhr.responseText)
+            const errorData = JSON.parse(xhr.responseText) as UploadErrorBody
             errorMessage = errorData.message || errorData.title || errorMessage
           } catch {
             errorMessage = xhr.statusText || errorMessage
@@ -126,7 +129,7 @@ export class ChunkedUploader {
     _endpoint: string,
     additionalData: Record<string, string>,
     __onProgress?: (progress: ChunkProgress) => void
-  ): Promise<any> {
+  ): Promise<unknown> {
     const totalChunks = Math.ceil(file.size / this.chunkSize)
     const uploadId = this.generateUploadId()
     
@@ -243,7 +246,7 @@ export class ChunkedUploader {
         } else {
           let errorMessage = `HTTP error! status: ${xhr.status}`
           try {
-            const errorData = JSON.parse(xhr.responseText)
+            const errorData = JSON.parse(xhr.responseText) as UploadErrorBody
             errorMessage = errorData.message || errorMessage
           } catch {
             errorMessage = xhr.statusText || errorMessage
@@ -270,7 +273,7 @@ export class ChunkedUploader {
     uploadId: string,
     fileName: string,
     additionalData: Record<string, string>
-  ): Promise<any> {
+  ): Promise<UploadResponseBody> {
     const formData = new FormData()
     formData.append('uploadId', uploadId)
     formData.append('fileName', fileName)
@@ -285,15 +288,15 @@ export class ChunkedUploader {
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
-            const result = JSON.parse(xhr.responseText)
+            const result = JSON.parse(xhr.responseText) as UploadResponseBody
             resolve(result)
-          } catch (error) {
+          } catch {
             reject(new ChunkedUploadError('Failed to parse final response JSON'))
           }
         } else {
           let errorMessage = `HTTP error! status: ${xhr.status}`
           try {
-            const errorData = JSON.parse(xhr.responseText)
+            const errorData = JSON.parse(xhr.responseText) as UploadErrorBody
             errorMessage = errorData.message || errorMessage
           } catch {
             errorMessage = xhr.statusText || errorMessage
